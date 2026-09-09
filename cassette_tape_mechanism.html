@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Physics & Engineering of Magnetic Audio Tape</title>
+
+    <!-- Chosen Palette: Warm Analog Nostalgia (Warm Neutral Background #FBF9F5, Slate Charcoal #1E293B, Cassette Brown #78350F, Vintage Amber #D97706, Teal Accent #0D9488) -->
+
+    <!-- Application Structure Plan:
+        1. Header & Metric Highlights: Core physical constraints (1.875 ips, 0.6mm tracks, ~100kHz bias, 50-90dB dynamic range).
+        2. Functional Section Navigation Bar: Tabbed interface separating deep technical domains into digestible interactive modules.
+        3. Module 1: The Electromagnetic Transducer Simulator (Interactive HTML5 Canvas showing live tape passing across Record/Playback/Erase heads, magnetic domain alignment, and flux induction).
+        4. Module 2: IEC Tape Formulations & Cassette Shell Mechanical Architecture (Interactive tape selector, performance radar/bar chart, dynamic shell edge notch visualizer, Néel-Brown superparamagnetism explanation).
+        5. Module 3: AC Bias & Anhysteretic Magnetization Physics (Interactive Hysteresis B-H Loop simulator demonstrating how ultrasonic AC bias eliminates crossover distortion).
+        6. Module 4: Transport Kinematics & Wow/Flutter (Closed-loop dual capstan vs single capstan interactive tape path diagram with speed instability simulator).
+        7. Module 5: Spatial Geometry & Mathematical Loss Calculators (Live calculators and dynamic Chart.js curves for the Wallace Spacing Loss formula and Azimuth Alignment Phase Cancellation).
+        8. Module 6: Noise Reduction Architectures & Dolby HX Pro (Compander dynamic range comparison chart and dynamic biasing servo simulation).
+        Why: This non-linear, interactive structure allows users to jump directly between microscopic physics (domain alignment), electromechanical engineering (capstans & heads), and mathematical modeling (Wallace loss formulas), making abstract analog principles tangibly clear.
+    -->
+
+    <!-- Visualization & Content Choices:
+        - Canvas Transducer Simulator -> Interactive HTML5 Canvas context API (NO SVG) -> Renders physical tape ribbon, magnetic dipole domains (N/S arrows), and head core fringing fields in real-time.
+        - Tape Performance Chart -> Chart.js (Canvas) -> Multi-metric bar comparison of Hc (Coercivity), Br (Remanence), Bass MOL, and Treble SOL across IEC Types I, II, III, IV.
+        - Shell Notch Architecture -> Pure HTML/Tailwind CSS styling -> Visual representation of cassette top edge dynamically inserting or removing mechanical detection notches based on selected tape type.
+        - AC Bias Hysteresis Plot -> Interactive HTML5 Canvas -> Real-time rendering of the major B-H curve and anhysteretic magnetization exit vector.
+        - Wallace Loss Calculator -> Chart.js Line Plot + Live JS Equation Solver -> Generates dynamic frequency response decay curves across 20Hz-20kHz based on user distance slider 'd'.
+        - Noise Reduction Matrix -> Chart.js Horizontal Bar Chart -> Compares dynamic range ceilings and hiss suppression levels across Dolby B/C/S, dbx, and unassisted ferric.
+    -->
+
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        cream: '#FBF9F5',
+                        warmcard: '#F3EFE6',
+                        tapebrown: '#78350F',
+                        tapeamber: '#D97706',
+                        tapeteal: '#0D9488',
+                        darkslate: '#1E293B',
+                        softborder: '#E2E8F0'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 650px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 380px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 340px;
+            }
+        }
+        input[type=range] {
+            accent-color: #D97706;
+        }
+    </style>
+</head>
+<body class="bg-cream text-darkslate font-sans antialiased min-h-screen flex flex-col selection:bg-tapeamber selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-darkslate text-cream sticky top-0 z-50 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <span class="text-3xl">📼</span>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight text-white">Cassette Physics & Engineering Explorer</h1>
+                    <p class="text-xs text-amber-400 font-mono">Interactive Analysis of Analog Magnetic Storage Technology</p>
+                </div>
+            </div>
+            
+            <!-- Quick Stat Badges -->
+            <div class="flex flex-wrap gap-2 text-xs font-mono">
+                <div class="bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
+                    <span class="text-slate-400">Tape Speed:</span> <span class="text-amber-400 font-bold">1.875 ips (4.76 cm/s)</span>
+                </div>
+                <div class="bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
+                    <span class="text-slate-400">Track Width:</span> <span class="text-amber-400 font-bold">0.6 mm</span>
+                </div>
+                <div class="bg-slate-800 px-2.5 py-1 rounded border border-slate-700">
+                    <span class="text-slate-400">AC Bias:</span> <span class="text-amber-400 font-bold">~100 kHz</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section Navigation Tabs -->
+        <nav class="bg-slate-800 border-t border-slate-700 overflow-x-auto">
+            <div class="max-w-7xl mx-auto px-4 flex whitespace-nowrap text-sm font-medium">
+                <button onclick="switchTab('transducer')" id="tab-transducer" class="px-4 py-2.5 text-amber-400 border-b-2 border-amber-400 hover:text-amber-300 transition-colors">1. Head/Tape Physics</button>
+                <button onclick="switchTab('formulations')" id="tab-formulations" class="px-4 py-2.5 text-slate-300 border-b-2 border-transparent hover:text-amber-300 transition-colors">2. Tape Formulations (IEC)</button>
+                <button onclick="switchTab('acbias')" id="tab-acbias" class="px-4 py-2.5 text-slate-300 border-b-2 border-transparent hover:text-amber-300 transition-colors">3. AC Bias & Hysteresis</button>
+                <button onclick="switchTab('transport')" id="tab-transport" class="px-4 py-2.5 text-slate-300 border-b-2 border-transparent hover:text-amber-300 transition-colors">4. Transport Kinematics</button>
+                <button onclick="switchTab('losses')" id="tab-losses" class="px-4 py-2.5 text-slate-300 border-b-2 border-transparent hover:text-amber-300 transition-colors">5. Spatial Loss Calculators</button>
+                <button onclick="switchTab('noisered')" id="tab-noisered" class="px-4 py-2.5 text-slate-300 border-b-2 border-transparent hover:text-amber-300 transition-colors">6. Noise Reduction Systems</button>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- ========================================== -->
+        <!-- MODULE 1: TRANSDUCER & CORE PHYSICS        -->
+        <!-- ========================================== -->
+        <section id="sec-transducer" class="space-y-6">
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <h2 class="text-2xl font-bold text-darkslate mb-2 flex items-center gap-2">
+                    <span>⚡</span> 1. Electromagnetic Recording & Playback Transduction
+                </h2>
+                <p class="text-slate-600 leading-relaxed text-sm md:text-base">
+                    At its core, a cassette recorder translates temporal acoustic pressure waves into continuous spatial magnetic patterns using Faraday's law of electromagnetic induction. As alternating current flows through the record head's wire coil, it creates an oscillating magnetic field within a toroidal core. This flux bridges the microscopic core gap and fringes outward into the passing tape, forcibly realigning microscopic ferromagnetic dipoles in the tape's binder coating. During playback, these magnetized dipoles move across the playback head gap, inducing a tiny varying voltage across the playback coil that mirrors the recorded sound wave.
+                </p>
+            </div>
+
+            <!-- Interactive Simulator Canvas Card -->
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4">
+                    <div>
+                        <h3 class="font-bold text-lg text-slate-800">Interactive Electromagnetic Transducer Simulator</h3>
+                        <p class="text-xs text-slate-500">Observe how magnetic domains are written to or read from the passing tape substrate in real-time.</p>
+                    </div>
+
+                    <!-- Simulator Mode Controls -->
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="setTransducerMode('record')" id="btn-mode-record" class="px-3 py-1.5 rounded text-xs font-bold bg-tapeamber text-white shadow-sm">Record Mode</button>
+                        <button onclick="setTransducerMode('playback')" id="btn-mode-playback" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">Playback Mode</button>
+                        <button onclick="setTransducerMode('erase')" id="btn-mode-erase" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200">Erase Mode</button>
+                    </div>
+                </div>
+
+                <!-- Canvas Visualizer -->
+                <div class="bg-slate-900 rounded-lg p-3 overflow-hidden shadow-inner flex justify-center items-center">
+                    <canvas id="transducerCanvas" width="900" height="320" class="w-full max-w-full rounded h-auto border border-slate-800"></canvas>
+                </div>
+
+                <!-- Interactive Sliders -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6 bg-warmcard p-4 rounded-lg border border-slate-200 text-xs md:text-sm">
+                    <div>
+                        <div class="flex justify-between font-medium text-slate-700 mb-1">
+                            <label for="input-freq">Audio Input Signal Frequency:</label>
+                            <span id="val-freq" class="font-mono text-tapeamber font-bold">440 Hz</span>
+                        </div>
+                        <input type="range" id="input-freq" min="100" max="2000" value="440" step="10" class="w-full cursor-pointer">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between font-medium text-slate-700 mb-1">
+                            <label for="input-speed">Tape Transport Speed:</label>
+                            <span id="val-speed" class="font-mono text-tapeamber font-bold">1.875 ips (Standard)</span>
+                        </div>
+                        <input type="range" id="input-speed" min="0" max="2" value="1" step="1" class="w-full cursor-pointer">
+                    </div>
+
+                    <div>
+                        <div class="flex justify-between font-medium text-slate-700 mb-1">
+                            <label for="input-gap">Head Gap Width:</label>
+                            <span id="val-gap" class="font-mono text-tapeamber font-bold">1.5 µm (Record Gap)</span>
+                        </div>
+                        <input type="range" id="input-gap" min="0.6" max="4.0" value="1.5" step="0.1" class="w-full cursor-pointer">
+                    </div>
+                </div>
+
+                <!-- Context Explanation Panel -->
+                <div id="transducer-explain" class="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200 text-xs md:text-sm text-slate-800">
+                    <span class="font-bold text-tapeamber">Recording Physics:</span> The electrical signal flows through the coil windings, creating a strong alternating flux within the permeable core. At the gap, flux bridges outward (fringing field). As magnetic domains (dipoles) enter this field, their vectors are oriented permanently according to the current signal amplitude and polarity.
+                </div>
+            </div>
+
+            <!-- Aux Adapter Explainer Callout -->
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-2">
+                    <h3 class="font-bold text-lg text-slate-800 mb-2">Did You Know? The Cassette Aux Adapter Trick</h3>
+                    <p class="text-xs md:text-sm text-slate-600 leading-relaxed">
+                        Modern smartphone cassette adapters do not contain magnetic tape at all. Instead, they route an audio signal into a tiny internal electromagnet positioned directly against the player's playback head. By generating an alternating magnetic field that directly mirrors the digital audio waveform, the adapter induces current into the deck's playback coil through direct Faraday induction—tricking the vintage machine into playing sound without moving tape!
+                    </p>
+                </div>
+                <div class="bg-warmcard p-4 rounded-lg flex flex-col justify-center items-center text-center border border-slate-200">
+                    <span class="text-4xl mb-2">🔌 ➔ 📼</span>
+                    <span class="font-bold text-xs text-slate-700">Direct Field Induction</span>
+                    <span class="text-xs text-slate-500">Bypasses magnetic tape completely</span>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- MODULE 2: TAPE FORMULATIONS & IEC TYPES    -->
+        <!-- ========================================== -->
+        <section id="sec-formulations" class="space-y-6 hidden">
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <h2 class="text-2xl font-bold text-darkslate mb-2 flex items-center gap-2">
+                    <span>🧲</span> 2. Ferromagnetic Formulations & IEC Standardization
+                </h2>
+                <p class="text-slate-600 leading-relaxed text-sm md:text-base">
+                    Magnetic tape performance is dictated by its microscopic particle composition. Two fundamental metrics govern magnetic capabilities: <strong>Coercivity ($H_c$)</strong> (measured in Oersteds), which quantifies a material's resistance to demagnetization, and <strong>Saturation Remanence ($B_r$)</strong> (measured in Gauss), which determines maximum retrievable flux strength. To standardize recording hardware, the International Electrotechnical Commission (IEC) established four distinct tape classifications in 1979.
+                </p>
+            </div>
+
+            <!-- Tape Selector & Metric Explorer Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Interactive Controls & Selector Cards -->
+                <div class="space-y-3 lg:col-span-1">
+                    <h3 class="font-bold text-slate-800 text-sm tracking-wide uppercase">Select IEC Classification:</h3>
+                    
+                    <button onclick="selectTapeType('type1')" id="card-type1" class="w-full text-left p-4 rounded-xl border-2 border-tapeamber bg-amber-50 shadow-sm transition-all">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800">IEC Type I (Normal)</span>
+                            <span class="text-xs font-mono bg-amber-200 text-amber-900 px-2 py-0.5 rounded">120 µs EQ</span>
+                        </div>
+                        <p class="text-xs text-slate-600 mt-1">Gamma Ferric Oxide ($\gamma$-Fe$_2$O$_3$). High low-frequency MOL, higher noise floor.</p>
+                    </button>
+
+                    <button onclick="selectTapeType('type2')" id="card-type2" class="w-full text-left p-4 rounded-xl border-2 border-transparent bg-white hover:bg-slate-50 border-slate-200 transition-all">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800">IEC Type II (High/Chrome)</span>
+                            <span class="text-xs font-mono bg-teal-100 text-teal-800 px-2 py-0.5 rounded">70 µs EQ</span>
+                        </div>
+                        <p class="text-xs text-slate-600 mt-1">Chromium Dioxide (CrO$_2$) or Cobalt-doped Fe$_2$O$_3$. Superior treble, lower hiss.</p>
+                    </button>
+
+                    <button onclick="selectTapeType('type3')" id="card-type3" class="w-full text-left p-4 rounded-xl border-2 border-transparent bg-white hover:bg-slate-50 border-slate-200 transition-all">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800">IEC Type III (Ferrochrome)</span>
+                            <span class="text-xs font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded">70 µs EQ</span>
+                        </div>
+                        <p class="text-xs text-slate-600 mt-1">Dual-layer Fe$_2$O$_3$ + CrO$_2$ top. Rare hybrid format, now obsolete.</p>
+                    </button>
+
+                    <button onclick="selectTapeType('type4')" id="card-type4" class="w-full text-left p-4 rounded-xl border-2 border-transparent bg-white hover:bg-slate-50 border-slate-200 transition-all">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-800">IEC Type IV (Metal)</span>
+                            <span class="text-xs font-mono bg-slate-200 text-slate-800 px-2 py-0.5 rounded">70 µs EQ</span>
+                        </div>
+                        <p class="text-xs text-slate-600 mt-1">Pure Iron particles (Fe). Massive $B_r$ and $H_c$. Reference dynamic range.</p>
+                    </button>
+                </div>
+
+                <!-- Dynamic Visualizations (Chart & Cassette Shell Geometry) -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Chart.js Performance Container -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                        <h3 class="font-bold text-slate-800 text-sm mb-2">Magnetic Metric Comparison</h3>
+                        <div class="chart-container">
+                            <canvas id="tapeTypeChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Cassette Shell Notch Architecture Visualizer -->
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                        <h3 class="font-bold text-slate-800 text-sm mb-1">Cassette Shell Mechanical Detection Notches</h3>
+                        <p class="text-xs text-slate-500 mb-4">Cassette decks use mechanical leaf switches to automatically sense the tape formulation inserted via physical notches molded into the shell's top spine.</p>
+                        
+                        <!-- Dynamic CSS Shell Edge Rendering -->
+                        <div class="bg-slate-800 p-6 rounded-lg relative overflow-hidden flex flex-col items-center">
+                            <span class="text-xs text-slate-400 font-mono mb-2">TOP SPINE VIEW OF CASSETTE SHELL</span>
+                            <div class="w-full max-w-md h-16 bg-amber-900 border-2 border-amber-700 rounded-t-lg flex justify-between items-end px-4 pb-2 relative">
+                                
+                                <!-- Left Write-Protect Tab -->
+                                <div id="notch-wp-left" class="w-8 h-8 bg-slate-900 border border-slate-700 rounded-sm flex items-center justify-center text-[10px] text-amber-500 font-mono">WP</div>
+                                
+                                <!-- Left Type II Notch -->
+                                <div id="notch-t2-left" class="w-8 h-8 bg-amber-900 border border-amber-700 rounded-sm flex items-center justify-center text-[10px] text-slate-400 font-mono">Type II</div>
+
+                                <!-- Center Type IV Notches -->
+                                <div id="notch-t4-center" class="w-16 h-8 bg-amber-900 border border-amber-700 rounded-sm flex items-center justify-center text-[10px] text-slate-400 font-mono">Type IV</div>
+
+                                <!-- Right Type II Notch -->
+                                <div id="notch-t2-right" class="w-8 h-8 bg-amber-900 border border-amber-700 rounded-sm flex items-center justify-center text-[10px] text-slate-400 font-mono">Type II</div>
+
+                                <!-- Right Write-Protect Tab -->
+                                <div id="notch-wp-right" class="w-8 h-8 bg-slate-900 border border-slate-700 rounded-sm flex items-center justify-center text-[10px] text-amber-500 font-mono">WP</div>
+                            </div>
+                            <div id="shell-notch-desc" class="text-xs font-mono text-amber-400 mt-3 text-center">
+                                Type I Shell: Closed Chrome and Metal notches. Deck sets 120µs EQ and normal bias.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Néel-Brown Relaxation Math Card -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                <h3 class="font-bold text-slate-800 text-base mb-2">Microscopic Limits: Superparamagnetism & Néel-Brown Relaxation</h3>
+                <p class="text-xs md:text-sm text-slate-600 leading-relaxed">
+                    To reduce tape hiss, magnetic particles must be as tiny as possible. However, when particle volume ($V$) shrinks below a critical physical threshold, thermal ambient energy ($k_B T$) overcomes the magnetic anisotropy energy barrier ($KV$). The particle spontaneously flips its magnetic moment, thermalizing and destroying stored audio over time. The time required for spontaneous thermal erasure is calculated by the Néel relaxation equation:
+                </p>
+                <div class="my-3 p-3 bg-warmcard rounded-lg text-center font-mono text-sm font-bold text-slate-800 border border-slate-200">
+                    $$\tau_N = \tau_0 \exp\left(\frac{KV}{k_B T}\right)$$
+                </div>
+                <p class="text-xs text-slate-500">
+                    Where $\tau_0 \approx 10^{-9}\text{s}$ (gyromagnetic attempt time), $K$ is magnetic anisotropy, $V$ is volume, $k_B$ is Boltzmann's constant, and $T$ is temperature. Modern formulations balance ultra-fine particles with high anisotropy ($K$) to guarantee multi-decade archival stability.
+                </p>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- MODULE 3: AC BIAS & ANHYSTERETIC PHYSICS  -->
+        <!-- ========================================== -->
+        <section id="sec-acbias" class="space-y-6 hidden">
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <h2 class="text-2xl font-bold text-darkslate mb-2 flex items-center gap-2">
+                    <span>🔄</span> 3. The Physics of AC Bias & Anhysteretic Linearization
+                </h2>
+                <p class="text-slate-600 leading-relaxed text-sm md:text-base">
+                    Ferromagnetic materials exhibit severe non-linear magnetic hysteresis ($B$-$H$ curve). At low audio voltages, magnetic domain coercivity resists initial movement, introducing severe crossover distortion where faint audio vanishes entirely. To overcome this, cassette decks linearly sum the audio signal with an ultrasonic <strong>AC Bias</strong> sine wave (85 kHz – 105 kHz). The high-frequency field cycles domains rapidly back and forth across major hysteresis loops, "fluidizing" them so they exit the head gap frozen in near-perfect linear proportion to the audio signal.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Hysteresis Simulator Canvas -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-bold text-slate-800 text-sm">Interactive Hysteresis Loop ($B$-$H$ Curve)</h3>
+                        <button onclick="toggleBias()" id="btn-toggle-bias" class="px-3 py-1.5 rounded text-xs font-bold bg-tapeamber text-white">Toggle: AC Bias ON</button>
+                    </div>
+
+                    <div class="bg-slate-900 p-2 rounded-lg flex justify-center">
+                        <canvas id="hysteresisCanvas" width="450" height="320" class="w-full max-w-full rounded h-auto"></canvas>
+                    </div>
+
+                    <p class="text-xs text-slate-500 mt-3">
+                        <span class="font-bold text-slate-700">Visual Guide:</span> Horizontal axis ($H$) represents applied magnetizing field from the head gap; Vertical axis ($B$) represents resulting retained magnetic flux density on tape.
+                    </p>
+                </div>
+
+                <!-- Explanation & Waveform Comparison -->
+                <div class="space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                        <h3 class="font-bold text-slate-800 text-sm mb-2">Linearization vs Distortion</h3>
+                        <div id="bias-status-text" class="p-4 rounded-lg bg-amber-50 border border-amber-200 text-xs md:text-sm text-slate-800 space-y-2">
+                            <p class="font-bold text-tapeamber">AC BIAS IS ACTIVE (Anhysteretic Mode):</p>
+                            <p class="leading-relaxed">
+                                The 100 kHz ultrasonic bias drives domains smoothly into saturation on every cycle. As the tape exits the trailing edge of the head gap, the oscillating field decays exponentially over distance. The underlying audio acts as a slowly shifting offset, leaving a remanent flux ($B_r$) that is perfectly proportional to the audio voltage.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="bg-warmcard p-6 rounded-xl border border-slate-200">
+                        <h4 class="font-bold text-slate-800 text-xs tracking-wide uppercase mb-3">Key Anhysteretic Properties</h4>
+                        <ul class="space-y-2 text-xs md:text-sm text-slate-700">
+                            <li class="flex items-start gap-2">
+                                <span class="text-tapeamber font-bold">✓</span>
+                                <span><strong>No AM Modulation:</strong> AC bias is linearly summed before the head coil; it is not amplitude modulated.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-tapeamber font-bold">✓</span>
+                                <span><strong>Self-Filtering:</strong> Because the 100 kHz wavelength is vastly smaller than the playback head gap, the bias tone is naturally eliminated during playback.</span>
+                            </li>
+                            <li class="flex items-start gap-2">
+                                <span class="text-tapeamber font-bold">✓</span>
+                                <span><strong>Zero-Crossing Freedom:</strong> Eliminates the dead-band coercivity threshold entirely, yielding dynamic range down to the thermal noise floor.</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- MODULE 4: TRANSPORT KINEMATICS             -->
+        <!-- ========================================== -->
+        <section id="sec-transport" class="space-y-6 hidden">
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <h2 class="text-2xl font-bold text-darkslate mb-2 flex items-center gap-2">
+                    <span>⚙️</span> 4. Mechanical Transport Kinematics & Speed Stability
+                </h2>
+                <p class="text-slate-600 leading-relaxed text-sm md:text-base">
+                    Unlike digital audio buffered by quartz clocks, analog tape fidelity is inextricably linked to continuous mechanical speed. Variations in tape velocity cause proportional pitch distortions known as <strong>Wow</strong> (slow speed variation from eccentric hubs) and <strong>Flutter</strong> (rapid speed flutter from friction or motor cogging). High-end decks utilize a <strong>Closed-Loop Dual Capstan</strong> transport to isolate the tape across the heads.
+                </p>
+            </div>
+
+            <!-- Transport Diagram Visualizer Card -->
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-sm">Transport Architecture Comparison</h3>
+                        <p class="text-xs text-slate-500">Compare standard single capstan drives with audiophile closed-loop dual capstans.</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="setTransportMode('single')" id="btn-trans-single" class="px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700">Single Capstan Drive</button>
+                        <button onclick="setTransportMode('dual')" id="btn-trans-dual" class="px-3 py-1.5 rounded text-xs font-bold bg-tapeamber text-white">Closed-Loop Dual Capstan</button>
+                    </div>
+                </div>
+
+                <!-- Canvas Visualizer for Tape Transport -->
+                <div class="bg-slate-900 rounded-lg p-3 overflow-hidden shadow-inner flex justify-center">
+                    <canvas id="transportCanvas" width="800" height="280" class="w-full max-w-full rounded h-auto"></canvas>
+                </div>
+
+                <div id="transport-explain-box" class="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200 text-xs md:text-sm text-slate-800">
+                    <span class="font-bold text-tapeamber">Closed-Loop Dual Capstan Advantage:</span> By driving the take-up capstan slightly faster (~0.2% differential speed) than the supply capstan, a precise micro-tension zone is created directly across the head block. This decouples the tape from shell friction, pushing the erratic shell pressure pad out of the way entirely and dropping wow/flutter below 0.02% WRMS.
+                </div>
+            </div>
+
+            <!-- Wow & Flutter Pitch Distortion Simulator -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                <h3 class="font-bold text-slate-800 text-sm mb-2">Wow & Flutter Instability Simulator</h3>
+                <p class="text-xs text-slate-500 mb-4">Adjust transport instability to see its immediate impact on timebase stability and waveform geometry.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                    <div>
+                        <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                            <label for="input-wf">Transport Speed Deviation:</label>
+                            <span id="val-wf" class="font-mono text-tapeamber">0.03% (Studio Reference)</span>
+                        </div>
+                        <input type="range" id="input-wf" min="0.02" max="0.5" step="0.01" value="0.03" class="w-full cursor-pointer">
+                    </div>
+
+                    <div class="md:col-span-2 bg-slate-900 p-4 rounded-lg flex items-center justify-center">
+                        <canvas id="wfCanvas" width="500" height="80" class="w-full rounded h-auto"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- MODULE 5: SPATIAL LOSS CALCULATORS        -->
+        <!-- ========================================== -->
+        <section id="sec-losses" class="space-y-6 hidden">
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <h2 class="text-2xl font-bold text-darkslate mb-2 flex items-center gap-2">
+                    <span>📐</span> 5. Spatial Geometry & Mathematical Loss Formulas
+                </h2>
+                <p class="text-slate-600 leading-relaxed text-sm md:text-base">
+                    At 1.875 ips (4.76 cm/s), high-frequency acoustic signals map to microscopic spatial wavelengths ($\lambda = v / f$). A 20,000 Hz treble note has a tape wavelength of just <strong>2.38 micrometers</strong>. This microscopic spatial density renders high frequencies vulnerable to severe geometric losses modeled by exact mathematical formulas.
+                </p>
+            </div>
+
+            <!-- Calculator 1: Wallace Spacing Loss -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-base mb-1">Wallace Spacing Loss Formula</h3>
+                        <p class="text-xs text-slate-500 mb-3">Calculates signal attenuation caused by microscopic separation ($d$) between the tape surface and head face.</p>
+                        
+                        <div class="p-3 bg-warmcard rounded-lg text-center font-mono text-xs md:text-sm font-bold text-slate-800 mb-4 border border-slate-200">
+                            $$\text{Loss (dB)} = 54.6 \left( \frac{d}{\lambda} \right)$$
+                        </div>
+
+                        <!-- Live Calculator Slider -->
+                        <div class="space-y-4">
+                            <div>
+                                <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                                    <label for="input-wallace-d">Head-Tape Separation Distance ($d$):</label>
+                                    <span id="val-wallace-d" class="font-mono text-tapeamber">0.25 µm</span>
+                                </div>
+                                <input type="range" id="input-wallace-d" min="0.0" max="1.5" step="0.05" value="0.25" class="w-full cursor-pointer">
+                            </div>
+
+                            <div class="p-3 bg-amber-50 rounded border border-amber-200 text-xs font-mono space-y-1">
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Loss at 1 kHz ($\lambda = 47.6\mu m$):</span>
+                                    <span id="loss-1k" class="font-bold text-slate-800">-0.29 dB</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-slate-600">Loss at 10 kHz ($\lambda = 4.76\mu m$):</span>
+                                    <span id="loss-10k" class="font-bold text-slate-800">-2.87 dB</span>
+                                </div>
+                                <div class="flex justify-between text-rose-700">
+                                    <span>Loss at 15 kHz ($\lambda = 3.17\mu m$):</span>
+                                    <span id="loss-15k" class="font-bold">-4.30 dB</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="text-xs text-slate-500 mt-4">
+                        <strong>Takeaway:</strong> Because wavelength ($\lambda$) is in the denominator, high frequencies suffer exponentially more from dust, dirt, or tape roughness.
+                    </p>
+                </div>
+
+                <!-- Dynamic Wallace Curve Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                    <h3 class="font-bold text-slate-800 text-sm mb-2">Live Wallace Loss Attenuation Spectrum</h3>
+                    <div class="chart-container">
+                        <canvas id="wallaceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Calculator 2: Azimuth Error Calculator -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder space-y-4">
+                <h3 class="font-bold text-slate-800 text-base">Azimuth Misalignment & Phase Cancellation</h3>
+                <p class="text-xs md:text-sm text-slate-600">
+                    Azimuth refers to the strict $90^\circ$ perpendicular alignment of the head gap to the longitudinal tape track. Tilt errors as small as a fraction of a degree cause severe phase cancellation across the 0.6 mm track width.
+                </p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
+                    <div>
+                        <div class="flex justify-between text-xs font-bold text-slate-700 mb-1">
+                            <label for="input-azimuth">Azimuth Error Angle ($\theta$):</label>
+                            <span id="val-azimuth" class="font-mono text-tapeamber">8 minutes (0.13°)</span>
+                        </div>
+                        <input type="range" id="input-azimuth" min="0" max="30" step="1" value="8" class="w-full cursor-pointer">
+                        
+                        <div id="azimuth-calc-out" class="mt-4 p-3 bg-warmcard rounded border border-slate-200 text-xs font-mono">
+                            Calculated Loss at 15 kHz: <span class="font-bold text-rose-600">-7.8 dB</span>
+                        </div>
+                    </div>
+
+                    <div class="md:col-span-2 bg-slate-900 p-4 rounded-lg flex items-center justify-center">
+                        <canvas id="azimuthCanvas" width="500" height="120" class="w-full rounded h-auto"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- ========================================== -->
+        <!-- MODULE 6: NOISE REDUCTION SYSTEMS          -->
+        <!-- ========================================== -->
+        <section id="sec-noisered" class="space-y-6 hidden">
+            <div class="bg-white rounded-xl p-6 shadow-sm border border-softborder">
+                <h2 class="text-2xl font-bold text-darkslate mb-2 flex items-center gap-2">
+                    <span>🎛</span> 6. Noise Floor Mitigation & Dynamic Compansion
+                </h2>
+                <p class="text-slate-600 leading-relaxed text-sm md:text-base">
+                    Due to particle randomness, unassisted cassette tape exhibits a noticeable background hiss, limiting dynamic range to roughly 50 dB. To achieve audiophile standards, engineers developed <strong>Compansion</strong> systems (Compression during recording, Expansion during playback) alongside active dynamic biasing servos like <strong>Dolby HX Pro</strong>.
+                </p>
+            </div>
+
+            <!-- Dynamic Range Comparison Chart & Noise Floor Matrix -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Chart.js Dynamic Range Chart -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-softborder">
+                    <h3 class="font-bold text-slate-800 text-sm mb-2">Effective Dynamic Range Comparison (dB)</h3>
+                    <div class="chart-container">
+                        <canvas id="noiseFloorChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Systems Explainer Accordion Grid -->
+                <div class="space-y-3">
+                    <div class="bg-white p-4 rounded-xl border border-softborder shadow-sm">
+                        <span class="font-bold text-slate-800 text-sm">Dolby B (1968)</span>
+                        <p class="text-xs text-slate-600 mt-1">Single sliding-band compander. Provides ~9 dB noise reduction above 5 kHz. Avoids audible "breathing" artifacts by relying on loud transients to mask tape hiss.</p>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-softborder shadow-sm">
+                        <span class="font-bold text-slate-800 text-sm">Dolby C (1980)</span>
+                        <p class="text-xs text-slate-600 mt-1">Dual-level staggered compander operating down to 2 kHz. Yields ~15 dB noise reduction with anti-saturation networks to prevent treble tape overload.</p>
+                    </div>
+
+                    <div class="bg-white p-4 rounded-xl border border-softborder shadow-sm">
+                        <span class="font-bold text-slate-800 text-sm">dbx Type II</span>
+                        <p class="text-xs text-slate-600 mt-1">Linear 2:1 logarithmic broadband compander across the entire spectrum. Delivers staggering >90 dB dynamic range (rivaling CDs), though vulnerable to tape dropouts.</p>
+                    </div>
+
+                    <div class="bg-amber-50 p-4 rounded-xl border border-amber-200 shadow-sm">
+                        <span class="font-bold text-tapeamber text-sm">Dolby HX Pro (Dynamic Bias Servo)</span>
+                        <p class="text-xs text-slate-700 mt-1"><strong>Not a noise reduction decoder!</strong> HX Pro monitors incoming high-frequency audio content in real-time. When loud treble peaks act as self-bias, HX Pro dynamically lowers the 100 kHz oscillator output to prevent tape saturation and treble distortion.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-darkslate text-slate-400 text-xs py-6 mt-12 border-t border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 text-center space-y-2">
+            <p>Compact Cassette Physics & Engineering Explorer • Built based on original archival technical research</p>
+            <p class="text-slate-500 font-mono">1.875 ips • Faraday Induction • Anhysteretic AC Bias • Wallace Spacing Loss • Dolby Compansion</p>
+        </div>
+    </footer>
+
+
+    <!-- ========================================== -->
+    <!-- JAVASCRIPT LOGIC & SIMULATION ENGINE       -->
+    <!-- ========================================== -->
+    <script>
+        // --- GLOBAL STATE MANAGEMENT ---
+        let currentTab = 'transducer';
+        let transducerMode = 'record'; // 'record', 'playback', 'erase'
+        let currentTapeType = 'type1';
+        let isBiasActive = true;
+        let transportMode = 'dual'; // 'single', 'dual'
+
+        // --- CHART INSTANCES ---
+        let tapeTypeChartObj = null;
+        let wallaceChartObj = null;
+        let noiseFloorChartObj = null;
+
+        // --- DOM INITIALIZATION ---
+        window.addEventListener('DOMContentLoaded', () => {
+            initTransducerSimulator();
+            initTapeTypeChart();
+            initHysteresisSimulator();
+            initTransportSimulator();
+            initWallaceCalculator();
+            initNoiseFloorChart();
+            setupEventListeners();
+        });
+
+        // --- NAVIGATION LOGIC ---
+        function switchTab(tabId) {
+            const tabs = ['transducer', 'formulations', 'acbias', 'transport', 'losses', 'noisered'];
+            tabs.forEach(t => {
+                document.getElementById(`sec-${t}`).classList.add('hidden');
+                const btn = document.getElementById(`tab-${t}`);
+                btn.classList.remove('text-amber-400', 'border-amber-400');
+                btn.classList.add('text-slate-300', 'border-transparent');
+            });
+
+            document.getElementById(`sec-${tabId}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            activeBtn.classList.add('text-amber-400', 'border-amber-400');
+            activeBtn.classList.remove('text-slate-300', 'border-transparent');
+            
+            currentTab = tabId;
+
+            // Trigger chart redraws on tab reveal
+            if(tabId === 'formulations' && tapeTypeChartObj) tapeTypeChartObj.resize();
+            if(tabId === 'losses' && wallaceChartObj) wallaceChartObj.resize();
+            if(tabId === 'noisered' && noiseFloorChartObj) noiseFloorChartObj.resize();
+        }
+
+        // ===================================================
+        // MODULE 1: TRANSDUCER CANVAS SIMULATOR (NO SVG)
+        // ===================================================
+        let canvas1, ctx1;
+        let tapeOffset = 0;
+        let particles = [];
+
+        function initTransducerSimulator() {
+            canvas1 = document.getElementById('transducerCanvas');
+            ctx1 = canvas1.getContext('2d');
+
+            // Generate initial random magnetic particles along the tape ribbon
+            particles = [];
+            for(let x = 0; x < 1200; x += 12) {
+                particles.push({
+                    x: x,
+                    y: 220 + Math.random() * 24,
+                    angle: (Math.random() - 0.5) * Math.PI // random initial vectors
+                });
+            }
+
+            requestAnimationFrame(renderTransducerLoop);
+        }
+
+        function setTransducerMode(mode) {
+            transducerMode = mode;
+            document.getElementById('btn-mode-record').className = mode === 'record' ? 'px-3 py-1.5 rounded text-xs font-bold bg-tapeamber text-white shadow-sm' : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200';
+            document.getElementById('btn-mode-playback').className = mode === 'playback' ? 'px-3 py-1.5 rounded text-xs font-bold bg-tapeteal text-white shadow-sm' : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200';
+            document.getElementById('btn-mode-erase').className = mode === 'erase' ? 'px-3 py-1.5 rounded text-xs font-bold bg-rose-600 text-white shadow-sm' : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700 hover:bg-slate-200';
+
+            const box = document.getElementById('transducer-explain');
+            if(mode === 'record') {
+                box.innerHTML = `<span class="font-bold text-tapeamber">Recording Physics:</span> The electrical signal flows through coil windings, creating an oscillating fringing field at the core gap. Moving particles traversing the gap are permanently aligned according to signal polarity.`;
+            } else if(mode === 'playback') {
+                box.innerHTML = `<span class="font-bold text-tapeteal">Playback Physics:</span> Recorded magnetic particles move past the playback head gap. Their magnetized flux enters the core, inducing a microscopic proportional voltage across the coil.`;
+            } else {
+                box.innerHTML = `<span class="font-bold text-rose-600">Erase Physics:</span> High-power AC bias current floods the wide erase head gap, rapidly cycling magnetic particles to randomize their dipoles into a quiet state.`;
+            }
+        }
+
+        function renderTransducerLoop() {
+            ctx1.fillStyle = '#0f172a'; // Slate-900 background
+            ctx1.fillRect(0, 0, canvas1.width, canvas1.height);
+
+            const speedSetting = parseFloat(document.getElementById('input-speed').value);
+            const speed = speedSetting === 0 ? 0 : (speedSetting === 1 ? 1.5 : 3.0);
+            const freq = parseFloat(document.getElementById('input-freq').value);
+            const gapWidth = parseFloat(document.getElementById('input-gap').value) * 12;
+
+            // Move Tape Ribbon
+            tapeOffset += speed;
+            if(tapeOffset > 12) tapeOffset %= 12;
+
+            // --- DRAW TAPE SUBSTRATE RIBBON ---
+            ctx1.fillStyle = '#334155'; // Muted substrate
+            ctx1.fillRect(0, 210, canvas1.width, 45);
+            ctx1.fillStyle = '#78350f'; // Oxide binder coating
+            ctx1.fillRect(0, 210, canvas1.width, 10);
+
+            // Tape guide text
+            ctx1.fillStyle = '#94a3b8';
+            ctx1.font = '10px monospace';
+            ctx1.fillText("◄◄ TAPE MOTION DIRECTION (1.875 ips)", 20, 248);
+
+            // --- DRAW MAGNETIC HEAD CORE (TOROID WITH GAP) ---
+            const headCenterX = 450;
+            const headTopY = 40;
+
+            ctx1.fillStyle = '#64748b'; // Permalloy Core
+            // Left pole piece
+            ctx1.beginPath();
+            ctx1.moveTo(headCenterX - 180, headTopY);
+            ctx1.lineTo(headCenterX - gapWidth/2, headTopY);
+            ctx1.lineTo(headCenterX - gapWidth/2, 205);
+            ctx1.lineTo(headCenterX - 120, 205);
+            ctx1.lineTo(headCenterX - 120, headTopY + 60);
+            ctx1.lineTo(headCenterX - 180, headTopY + 60);
+            ctx1.closePath();
+            ctx1.fill();
+
+            // Right pole piece
+            ctx1.beginPath();
+            ctx1.moveTo(headCenterX + 180, headTopY);
+            ctx1.lineTo(headCenterX + gapWidth/2, headTopY);
+            ctx1.lineTo(headCenterX + gapWidth/2, 205);
+            ctx1.lineTo(headCenterX + 120, 205);
+            ctx1.lineTo(headCenterX + 120, headTopY + 60);
+            ctx1.lineTo(headCenterX + 180, headTopY + 60);
+            ctx1.closePath();
+            ctx1.fill();
+
+            // Non-magnetic gap spacer
+            ctx1.fillStyle = '#cbd5e1';
+            ctx1.fillRect(headCenterX - gapWidth/2, 190, gapWidth, 18);
+
+            // Coils
+            ctx1.fillStyle = '#d97706'; // Copper coil
+            for(let y = 65; y < 180; y += 14) {
+                ctx1.fillRect(headCenterX - 170, y, 45, 8);
+                ctx1.fillRect(headCenterX + 125, y, 45, 8);
+            }
+
+            // Head Label
+            ctx1.fillStyle = '#f8fafc';
+            ctx1.font = 'bold 12px sans-serif';
+            ctx1.fillText(transducerMode.toUpperCase() + " HEAD CORE", headCenterX - 45, headTopY + 30);
+
+            // Signal wave input calculation
+            const time = Date.now() * 0.003;
+            const currentSignal = Math.sin(time * (freq / 200));
+
+            // --- DRAW FRINGING FIELD LINES IN RECORD/ERASE MODE ---
+            if(transducerMode === 'record' || transducerMode === 'erase') {
+                ctx1.strokeStyle = transducerMode === 'record' ? `rgba(217, 119, 6, ${Math.abs(currentSignal)})` : 'rgba(225, 29, 72, 0.8)';
+                ctx1.lineWidth = 2;
+                ctx1.beginPath();
+                ctx1.arc(headCenterX, 205, gapWidth + 15, Math.PI, 0, true);
+                ctx1.arc(headCenterX, 205, gapWidth + 30, Math.PI, 0, true);
+                ctx1.stroke();
+            }
+
+            // --- UPDATE & DRAW PARTICLES (MAGNETIC DIPOLES) ---
+            particles.forEach(p => {
+                p.x -= speed;
+                if(p.x < 0) p.x += canvas1.width;
+
+                // If particle passes under head gap in RECORD mode
+                if(transducerMode === 'record' && Math.abs(p.x - headCenterX) < gapWidth) {
+                    p.angle = currentSignal * (Math.PI / 2); // Align vector
+                }
+                // ERASE mode randomizes
+                else if(transducerMode === 'erase' && Math.abs(p.x - headCenterX) < 40) {
+                    p.angle = (Math.random() - 0.5) * Math.PI;
+                }
+
+                // Draw dipole arrow/line
+                const dx = Math.cos(p.angle) * 5;
+                const dy = Math.sin(p.angle) * 5;
+
+                ctx1.strokeStyle = p.angle > 0.1 ? '#38bdf8' : (p.angle < -0.1 ? '#f43f5e' : '#94a3b8');
+                ctx1.lineWidth = 2;
+                ctx1.beginPath();
+                ctx1.moveTo(p.x - dx, p.y - dy);
+                ctx1.lineTo(p.x + dx, p.y + dy);
+                ctx1.stroke();
+            });
+
+            // --- OSCILLOSCOPE INSET ---
+            ctx1.fillStyle = '#020617';
+            ctx1.fillRect(20, 20, 160, 80);
+            ctx1.strokeStyle = '#334155';
+            ctx1.strokeRect(20, 20, 160, 80);
+            ctx1.fillStyle = '#38bdf8';
+            ctx1.font = '10px monospace';
+            ctx1.fillText(transducerMode === 'playback' ? "INDUCED OUTPUT VOLTAGE" : "INPUT AUDIO VOLTAGE", 25, 33);
+
+            ctx1.strokeStyle = transducerMode === 'playback' ? '#2dd4bf' : '#f59e0b';
+            ctx1.lineWidth = 1.5;
+            ctx1.beginPath();
+            for(let ox = 0; ox < 150; ox += 2) {
+                const oy = 60 + Math.sin((ox + Date.now()*0.1) * (freq/1000)) * 22;
+                if(ox === 0) ctx1.moveTo(25 + ox, oy);
+                else ctx1.lineTo(25 + ox, oy);
+            }
+            ctx1.stroke();
+
+            requestAnimationFrame(renderTransducerLoop);
+        }
+
+        // ===================================================
+        // MODULE 2: TAPE FORMULATION & NOTCH ARCHITECTURE
+        // ===================================================
+        const tapeData = {
+            type1: { name: 'Type I (Ferric)', Hc: 380, Br: 1600, mol: 4.5, sol: -3.0, eq: '120 µs' },
+            type2: { name: 'Type II (Chrome/Cobalt)', Hc: 620, Br: 1500, mol: 2.0, sol: 1.5, eq: '70 µs' },
+            type3: { name: 'Type III (Ferrochrome)', Hc: 480, Br: 2100, mol: 3.5, sol: -1.0, eq: '70 µs' },
+            type4: { name: 'Type IV (Metal)', Hc: 1150, Br: 3300, mol: 6.0, sol: 4.5, eq: '70 µs' }
+        };
+
+        function initTapeTypeChart() {
+            const ctx = document.getElementById('tapeTypeChart').getContext('2d');
+            tapeTypeChartObj = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Coercivity Hc (Oe)', 'Remanence Br (Gauss / 10)', 'Bass MOL (dB)', 'Treble SOL (dB)'],
+                    datasets: [{
+                        label: 'Type I Ferric',
+                        data: [380, 160, 4.5, -3.0],
+                        backgroundColor: 'rgba(217, 119, 6, 0.85)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function selectTapeType(type) {
+            currentTapeType = type;
+            const data = tapeData[type];
+
+            // Update UI Card Borders
+            ['type1', 'type2', 'type3', 'type4'].forEach(t => {
+                const card = document.getElementById(`card-${t}`);
+                if(t === type) {
+                    card.className = "w-full text-left p-4 rounded-xl border-2 border-tapeamber bg-amber-50 shadow-sm transition-all";
+                } else {
+                    card.className = "w-full text-left p-4 rounded-xl border-2 border-transparent bg-white hover:bg-slate-50 border-slate-200 transition-all";
+                }
+            });
+
+            // Update Chart Data
+            tapeTypeChartObj.data.datasets = [{
+                label: data.name,
+                data: [data.Hc, data.Br / 10, data.mol, data.sol],
+                backgroundColor: type === 'type4' ? '#334155' : (type === 'type2' ? '#0d9488' : '#d97706')
+            }];
+            tapeTypeChartObj.update();
+
+            // Update Cassette Shell Edge Notch Geometry
+            const notchT2L = document.getElementById('notch-t2-left');
+            const notchT2R = document.getElementById('notch-t2-right');
+            const notchT4 = document.getElementById('notch-t4-center');
+            const desc = document.getElementById('shell-notch-desc');
+
+            if(type === 'type1') {
+                notchT2L.style.backgroundColor = '#78350f';
+                notchT2R.style.backgroundColor = '#78350f';
+                notchT4.style.backgroundColor = '#78350f';
+                desc.textContent = "Type I Shell: Closed Chrome and Metal notches. Deck sets 120µs EQ and normal bias.";
+            } else if(type === 'type2' || type === 'type3') {
+                notchT2L.style.backgroundColor = '#0f172a';
+                notchT2R.style.backgroundColor = '#0f172a';
+                notchT4.style.backgroundColor = '#78350f';
+                desc.textContent = "Type II Shell: Outer notches OPEN. Leaf switches detect notches and auto-engage 70µs EQ + High Bias.";
+            } else if(type === 'type4') {
+                notchT2L.style.backgroundColor = '#0f172a';
+                notchT2R.style.backgroundColor = '#0f172a';
+                notchT4.style.backgroundColor = '#0f172a';
+                desc.textContent = "Type IV Shell: Outer AND Center notches OPEN. Deck auto-configures Metal Bias and maximum erase current.";
+            }
+        }
+
+        // ===================================================
+        // MODULE 3: AC BIAS HYSTERESIS CANVAS SIMULATOR
+        // ===================================================
+        let canvas2, ctx2;
+
+        function initHysteresisSimulator() {
+            canvas2 = document.getElementById('hysteresisCanvas');
+            ctx2 = canvas2.getContext('2d');
+            renderHysteresis();
+        }
+
+        function toggleBias() {
+            isBiasActive = !isBiasActive;
+            const btn = document.getElementById('btn-toggle-bias');
+            const text = document.getElementById('bias-status-text');
+
+            if(isBiasActive) {
+                btn.textContent = "Toggle: AC Bias ON";
+                btn.className = "px-3 py-1.5 rounded text-xs font-bold bg-tapeamber text-white";
+                text.className = "p-4 rounded-lg bg-amber-50 border border-amber-200 text-xs md:text-sm text-slate-800 space-y-2";
+                text.innerHTML = `<p class="font-bold text-tapeamber">AC BIAS IS ACTIVE (Anhysteretic Mode):</p><p class="leading-relaxed">The 100 kHz ultrasonic bias drives domains smoothly into saturation on every cycle. As the tape exits the head gap, the oscillating field decays exponentially over distance, leaving a remanent flux ($B_r$) that is perfectly proportional to the audio voltage.</p>`;
+            } else {
+                btn.textContent = "Toggle: AC Bias OFF";
+                btn.className = "px-3 py-1.5 rounded text-xs font-bold bg-rose-600 text-white";
+                text.className = "p-4 rounded-lg bg-rose-50 border border-rose-200 text-xs md:text-sm text-slate-800 space-y-2";
+                text.innerHTML = `<p class="font-bold text-rose-700">AC BIAS IS OFF (Severe Crossover Distortion):</p><p class="leading-relaxed">Without AC bias, low-amplitude audio signals cannot break the material's coercivity threshold ($H_c$). Low audio voltages generate zero magnetic remanence on tape, causing quiet sounds to vanish and louder sounds to suffer severe crossover distortion.</p>`;
+            }
+
+            renderHysteresis();
+        }
+
+        function renderHysteresis() {
+            ctx2.fillStyle = '#0f172a';
+            ctx2.fillRect(0, 0, canvas2.width, canvas2.height);
+
+            const cx = canvas2.width / 2;
+            const cy = canvas2.height / 2;
+
+            // Draw Coordinate Axes
+            ctx2.strokeStyle = '#334155';
+            ctx2.lineWidth = 1;
+            ctx2.beginPath();
+            ctx2.moveTo(20, cy); ctx2.lineTo(canvas2.width - 20, cy); // H axis
+            ctx2.moveTo(cx, 20); ctx2.lineTo(cx, canvas2.height - 20); // B axis
+            ctx2.stroke();
+
+            ctx2.fillStyle = '#94a3b8';
+            ctx2.font = '10px monospace';
+            ctx2.fillText("+H (Magnetizing Field)", canvas2.width - 130, cy - 8);
+            ctx2.fillText("+B (Flux Density)", cx + 8, 30);
+
+            if(!isBiasActive) {
+                // Draw Non-Linear Hysteresis Loop
+                ctx2.strokeStyle = '#f43f5e';
+                ctx2.lineWidth = 2.5;
+                ctx2.beginPath();
+                // Major loop shape
+                ctx2.moveTo(cx - 160, cy - 110);
+                ctx2.bezierCurveTo(cx - 30, cy - 110, cx + 40, cy - 10, cx + 160, cy + 110);
+                ctx2.bezierCurveTo(cx + 30, cy + 110, cx - 40, cy + 10, cx - 160, cy - 110);
+                ctx2.stroke();
+
+                // Draw dead-zone highlight
+                ctx2.fillStyle = 'rgba(244, 63, 94, 0.2)';
+                ctx2.fillRect(cx - 35, cy - 120, 70, 240);
+                ctx2.fillStyle = '#f43f5e';
+                ctx2.fillText("Coercivity Dead Zone", cx - 50, cy + 50);
+            } else {
+                // Draw Linear Anhysteretic Curve
+                ctx2.strokeStyle = '#2dd4bf';
+                ctx2.lineWidth = 2.5;
+                ctx2.beginPath();
+                ctx2.moveTo(cx - 150, cy - 110);
+                ctx2.lineTo(cx + 150, cy + 110);
+                ctx2.stroke();
+
+                // Draw shrinking bias decay loops
+                ctx2.strokeStyle = 'rgba(217, 119, 6, 0.4)';
+                ctx2.lineWidth = 1;
+                for(let r = 140; r > 10; r -= 20) {
+                    ctx2.beginPath();
+                    ctx2.ellipse(cx, cy, r, r * 0.7, Math.PI / 4, 0, Math.PI * 2);
+                    ctx2.stroke();
+                }
+                ctx2.fillStyle = '#fbbf24';
+                ctx2.fillText("Decaying 100kHz Bias Loops", cx + 20, cy - 60);
+            }
+        }
+
+        // ===================================================
+        // MODULE 4: TRANSPORT KINEMATICS & WOW/FLUTTER
+        // ===================================================
+        let canvasTrans, ctxTrans;
+        let canvasWF, ctxWF;
+
+        function initTransportSimulator() {
+            canvasTrans = document.getElementById('transportCanvas');
+            ctxTrans = canvasTrans.getContext('2d');
+
+            canvasWF = document.getElementById('wfCanvas');
+            ctxWF = canvasWF.getContext('2d');
+
+            requestAnimationFrame(renderTransportLoop);
+            requestAnimationFrame(renderWFLoop);
+        }
+
+        function setTransportMode(mode) {
+            transportMode = mode;
+            document.getElementById('btn-trans-single').className = mode === 'single' ? 'px-3 py-1.5 rounded text-xs font-bold bg-tapeamber text-white' : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700';
+            document.getElementById('btn-trans-dual').className = mode === 'dual' ? 'px-3 py-1.5 rounded text-xs font-bold bg-tapeamber text-white' : 'px-3 py-1.5 rounded text-xs font-bold bg-slate-100 text-slate-700';
+
+            const box = document.getElementById('transport-explain-box');
+            if(mode === 'single') {
+                box.innerHTML = `<span class="font-bold text-slate-800">Single Capstan Architecture:</span> Pulls tape from a single take-up side capstan. Relies on the cassette shell's internal felt pressure pad to push tape against the head face, introducing friction and skew.`;
+            } else {
+                box.innerHTML = `<span class="font-bold text-tapeamber">Closed-Loop Dual Capstan Advantage:</span> By driving the take-up capstan slightly faster (~0.2% speed differential) than the supply capstan, a precise micro-tension zone is created directly across the head block, dropping wow/flutter below 0.02% WRMS.`;
+            }
+        }
+
+        function renderTransportLoop() {
+            ctxTrans.fillStyle = '#0f172a';
+            ctxTrans.fillRect(0, 0, canvasTrans.width, canvasTrans.height);
+
+            const cy = 180;
+
+            // Draw Tape path line
+            ctxTrans.strokeStyle = '#78350f';
+            ctxTrans.lineWidth = 6;
+            ctxTrans.beginPath();
+            ctxTrans.moveTo(80, cy);
+            ctxTrans.lineTo(720, cy);
+            ctxTrans.stroke();
+
+            // Head Block Center
+            ctxTrans.fillStyle = '#475569';
+            ctxTrans.fillRect(340, cy - 40, 120, 38);
+            ctxTrans.fillStyle = '#f8fafc';
+            ctxTrans.font = '10px sans-serif';
+            ctxTrans.fillText("HEAD ASSEMBLY", 355, cy - 20);
+
+            // Left Capstan + Pinch Roller
+            ctxTrans.fillStyle = '#cbd5e1'; // Capstan shaft
+            ctxTrans.beginPath(); ctxTrans.arc(200, cy - 12, 8, 0, Math.PI*2); ctxTrans.fill();
+            ctxTrans.fillStyle = '#334155'; // Pinch roller rubber
+            ctxTrans.beginPath(); ctxTrans.arc(200, cy + 22, 22, 0, Math.PI*2); ctxTrans.fill();
+
+            // Right Capstan + Pinch Roller
+            if(transportMode === 'dual') {
+                ctxTrans.fillStyle = '#cbd5e1';
+                ctxTrans.beginPath(); ctxTrans.arc(600, cy - 12, 8, 0, Math.PI*2); ctxTrans.fill();
+                ctxTrans.fillStyle = '#334155';
+                ctxTrans.beginPath(); ctxTrans.arc(600, cy + 22, 22, 0, Math.PI*2); ctxTrans.fill();
+
+                // Highlight Isolated Tension Zone
+                ctxTrans.strokeStyle = '#f59e0b';
+                ctxTrans.lineWidth = 2;
+                ctxTrans.setLineDash([4, 4]);
+                ctxTrans.strokeRect(215, cy - 50, 370, 80);
+                ctxTrans.setLineDash([]);
+                ctxTrans.fillStyle = '#f59e0b';
+                ctxTrans.font = 'bold 11px monospace';
+                ctxTrans.fillText("ISOLATED CONSTANT MICRO-TENSION ZONE", 280, cy - 58);
+            }
+
+            requestAnimationFrame(renderTransportLoop);
+        }
+
+        function renderWFLoop() {
+            ctxWF.fillStyle = '#0f172a';
+            ctxWF.fillRect(0, 0, canvasWF.width, canvasWF.height);
+
+            const wfVal = parseFloat(document.getElementById('input-wf').value);
+            document.getElementById('val-wf').textContent = wfVal.toFixed(2) + "% (WRMS)";
+
+            ctxWF.strokeStyle = wfVal > 0.15 ? '#f43f5e' : '#2dd4bf';
+            ctxWF.lineWidth = 2;
+            ctxWF.beginPath();
+
+            const time = Date.now() * 0.005;
+            for(let x = 0; x < canvasWF.width; x += 3) {
+                // Instability jitter calculation
+                const jitter = Math.sin(x * 0.05 + time) * (wfVal * 60) + (Math.random() - 0.5) * (wfVal * 20);
+                const y = 40 + Math.sin(x * 0.08) * 20 + jitter;
+                if(x === 0) ctxWF.moveTo(x, y);
+                else ctxWF.lineTo(x, y);
+            }
+            ctxWF.stroke();
+
+            requestAnimationFrame(renderWFLoop);
+        }
+
+        // ===================================================
+        // MODULE 5: WALLACE CALCULATOR & AZIMUTH
+        // ===================================================
+        function initWallaceCalculator() {
+            const ctx = document.getElementById('wallaceChart').getContext('2d');
+            wallaceChartObj = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['100Hz', '500Hz', '1kHz', '5kHz', '10kHz', '15kHz', '20kHz'],
+                    datasets: [{
+                        label: 'Wallace Attenuation Loss (dB)',
+                        data: [0, 0, -0.29, -1.43, -2.87, -4.30, -5.73],
+                        borderColor: '#d97706',
+                        backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: -20, max: 2 }
+                    }
+                }
+            });
+
+            document.getElementById('input-wallace-d').addEventListener('input', updateWallaceCalc);
+            document.getElementById('input-azimuth').addEventListener('input', updateAzimuthCalc);
+            updateWallaceCalc();
+            updateAzimuthCalc();
+        }
+
+        function updateWallaceCalc() {
+            const d = parseFloat(document.getElementById('input-wallace-d').value);
+            document.getElementById('val-wallace-d').textContent = d.toFixed(2) + " µm";
+
+            const tapeVelocity = 47600; // µm/sec (1.875 ips)
+            const freqs = [100, 500, 1000, 5000, 10000, 15000, 20000];
+
+            const losses = freqs.map(f => {
+                const lambda = tapeVelocity / f; // wavelength in µm
+                return -(54.6 * (d / lambda));
+            });
+
+            document.getElementById('loss-1k').textContent = losses[2].toFixed(2) + " dB";
+            document.getElementById('loss-10k').textContent = losses[4].toFixed(2) + " dB";
+            document.getElementById('loss-15k').textContent = losses[5].toFixed(2) + " dB";
+
+            wallaceChartObj.data.datasets[0].data = losses;
+            wallaceChartObj.update();
+        }
+
+        function updateAzimuthCalc() {
+            const minutes = parseFloat(document.getElementById('input-azimuth').value);
+            document.getElementById('val-azimuth').textContent = minutes + " minutes (" + (minutes/60).toFixed(2) + "°)";
+
+            const cv = document.getElementById('azimuthCanvas');
+            const cx = cv.getContext('2d');
+            cx.fillStyle = '#0f172a';
+            cx.fillRect(0, 0, cv.width, cv.height);
+
+            // Render tilted head gap visualizer
+            const angleRad = (minutes / 60) * (Math.PI / 180) * 15; // exaggerated scale for visual clarity
+
+            cx.strokeStyle = '#38bdf8';
+            cx.lineWidth = 8;
+            cx.beginPath();
+            cx.moveTo(100, 20);
+            cx.lineTo(100, 100);
+            cx.stroke();
+            cx.fillStyle = '#94a3b8';
+            cx.font = '10px monospace';
+            cx.fillText("Perfect 90° Azimuth", 50, 115);
+
+            // Tilted gap
+            cx.save();
+            cx.translate(350, 60);
+            cx.rotate(angleRad);
+            cx.strokeStyle = minutes > 10 ? '#f43f5e' : '#fbbf24';
+            cx.lineWidth = 8;
+            cx.beginPath();
+            cx.moveTo(0, -40);
+            cx.lineTo(0, 40);
+            cx.stroke();
+            cx.restore();
+
+            cx.fillStyle = minutes > 10 ? '#f43f5e' : '#fbbf24';
+            cx.fillText(`Misaligned Gap (${(minutes/60).toFixed(2)}°)`, 300, 115);
+        }
+
+        // ===================================================
+        // MODULE 6: NOISE REDUCTION CHART
+        // ===================================================
+        function initNoiseFloorChart() {
+            const ctx = document.getElementById('noiseFloorChart').getContext('2d');
+            noiseFloorChartObj = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Unassisted Type I', 'Dolby B', 'Dolby C', 'Dolby S', 'dbx Type II'],
+                    datasets: [{
+                        label: 'Usable Dynamic Range (dB)',
+                        data: [50, 59, 65, 72, 92],
+                        backgroundColor: ['#64748b', '#d97706', '#0d9488', '#2563eb', '#7c3aed']
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { min: 40, max: 100 }
+                    }
+                }
+            });
+        }
+
+        function setupEventListeners() {
+            document.getElementById('input-freq').addEventListener('input', (e) => {
+                document.getElementById('val-freq').textContent = e.target.value + " Hz";
+            });
+            document.getElementById('input-speed').addEventListener('input', (e) => {
+                const vals = ["0 (Paused)", "1.875 ips (Standard)", "3.75 ips (High)"];
+                document.getElementById('val-speed').textContent = vals[e.target.value];
+            });
+            document.getElementById('input-gap').addEventListener('input', (e) => {
+                document.getElementById('val-gap').textContent = e.target.value + " µm";
+            });
+        }
+    </script>
+</body>
+</html>
